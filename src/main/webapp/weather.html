@@ -1,18 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Weather & Smart Alternatives — TravelMate</title>
-  <meta name="description" content="Weather-aware trip planning. Proactive indoor alternative proposals whenever rainfall or extreme conditions are forecast.">
-  
+  <meta name="description"
+    content="Weather-aware trip planning. Proactive indoor alternative proposals whenever rainfall or extreme conditions are forecast.">
+
   <!-- Bootstrap 5 CSS & Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  
+
   <!-- TravelMate Master Design System -->
   <link rel="stylesheet" href="css/travelmate.css">
 </head>
+
 <body>
 
   <!-- ================= GLOBAL NAVBAR ================= -->
@@ -30,16 +33,26 @@
 
       <div class="collapse navbar-collapse" id="tmNavbarMain">
         <ul class="navbar-nav mx-auto mb-2 mb-lg-0 gap-1">
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="index.html"><i class="bi bi-house-door"></i> Home</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="explore.html"><i class="bi bi-compass"></i> Explore</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="plan.html"><i class="bi bi-magic"></i> Plan</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="workspace.html"><i class="bi bi-map"></i> Itinerary</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="transport.html"><i class="bi bi-train-front"></i> Transport</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="hotels.html"><i class="bi bi-building"></i> Hotels</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="food.html"><i class="bi bi-cup-hot"></i> Food</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="budget.html"><i class="bi bi-wallet2"></i> Budget</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link active" href="weather.html"><i class="bi bi-cloud-sun"></i> Weather</a></li>
-          <li class="nav-item"><a class="nav-link tm-nav-link" href="trips.html"><i class="bi bi-journal-bookmark"></i> My Trips</a></li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="index.html"><i class="bi bi-house-door"></i>
+              Home</a></li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="explore.html"><i class="bi bi-compass"></i>
+              Explore</a></li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="plan.html"><i class="bi bi-magic"></i> Plan</a>
+          </li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="workspace.html"><i class="bi bi-map"></i>
+              Itinerary</a></li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="transport.html"><i class="bi bi-train-front"></i>
+              Transport</a></li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="hotels.html"><i class="bi bi-building"></i>
+              Hotels</a></li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="food.html"><i class="bi bi-cup-hot"></i> Food</a>
+          </li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="budget.html"><i class="bi bi-wallet2"></i>
+              Budget</a></li>
+          <li class="nav-item"><a class="nav-link tm-nav-link active" href="weather.html"><i
+                class="bi bi-cloud-sun"></i> Weather</a></li>
+          <li class="nav-item"><a class="nav-link tm-nav-link" href="trips.html"><i class="bi bi-journal-bookmark"></i>
+              My Trips</a></li>
         </ul>
 
         <div class="d-flex align-items-center gap-2">
@@ -60,7 +73,8 @@
             <label for="wt-dest-select" class="form-label small fw-bold text-muted mb-1">
               <i class="bi bi-geo-alt-fill text-primary"></i> DESTINATION QUICK-PICK
             </label>
-            <select class="form-select form-select-sm" id="wt-dest-select" onchange="handleDestinationDropdownChange(this)">
+            <select class="form-select form-select-sm" id="wt-dest-select"
+              onchange="handleDestinationDropdownChange(this)">
               <option value="">-- Choose destination or search --</option>
               <optgroup label="Active Journey">
                 <option value="active-trip" selected>Active Trip Destination</option>
@@ -83,19 +97,22 @@
               <i class="bi bi-search text-primary"></i> SEARCH PLACE (OPENSTREETMAP)
             </label>
             <div class="input-group input-group-sm">
-              <input type="text" class="form-control" id="wt-place-input" placeholder="e.g. Manali, Kochi, Varanasi, London..." aria-label="Search city or place">
+              <input type="text" class="form-control" id="wt-place-input"
+                placeholder="e.g. Manali, Kochi, Varanasi, London..." aria-label="Search city or place">
               <button class="btn btn-outline-primary" type="button" id="wt-btn-geocode" onclick="handleGeocodeSearch()">
                 <i class="bi bi-crosshair"></i> Geocode
               </button>
             </div>
-            <div id="wt-search-suggestions" class="list-group position-absolute shadow-sm d-none" style="z-index: 1050; max-height: 220px; overflow-y: auto; width: 350px;"></div>
+            <div id="wt-search-suggestions" class="list-group position-absolute shadow-sm d-none"
+              style="z-index: 1050; max-height: 220px; overflow-y: auto; width: 350px;"></div>
           </div>
 
           <div class="col-12 col-md-3 d-flex align-items-end gap-2 mt-auto">
             <button type="submit" class="tm-btn tm-btn-primary tm-btn-sm w-100" id="wt-btn-refresh">
               <i class="bi bi-arrow-clockwise"></i> Fetch Weather
             </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" title="Toggle Manual Lat/Lng" onclick="toggleManualCoords()">
+            <button type="button" class="btn btn-sm btn-outline-secondary" title="Toggle Manual Lat/Lng"
+              onclick="toggleManualCoords()">
               <i class="bi bi-sliders"></i>
             </button>
           </div>
@@ -106,17 +123,20 @@
               <span class="small fw-semibold text-muted">Manual Coordinates:</span>
               <div class="input-group input-group-sm" style="width: 140px;">
                 <span class="input-group-text">Lat</span>
-                <input type="number" step="0.0001" min="-90" max="90" class="form-control" id="wt-lat-input" placeholder="12.3051" aria-label="Latitude (-90 to 90)">
+                <input type="number" step="0.0001" min="-90" max="90" class="form-control" id="wt-lat-input"
+                  placeholder="12.3051" aria-label="Latitude (-90 to 90)">
               </div>
               <div class="input-group input-group-sm" style="width: 140px;">
                 <span class="input-group-text">Lng</span>
-                <input type="number" step="0.0001" min="-180" max="180" class="form-control" id="wt-lng-input" placeholder="76.6551" aria-label="Longitude (-180 to 180)">
+                <input type="number" step="0.0001" min="-180" max="180" class="form-control" id="wt-lng-input"
+                  placeholder="76.6551" aria-label="Longitude (-180 to 180)">
               </div>
               <div class="input-group input-group-sm" style="width: 140px;">
                 <span class="input-group-text">Date</span>
                 <input type="date" class="form-control" id="wt-date-input" aria-label="Forecast Date">
               </div>
-              <button type="button" class="btn btn-sm btn-primary" onclick="handleManualCoordsApply()">Apply Coordinates</button>
+              <button type="button" class="btn btn-sm btn-primary" onclick="handleManualCoordsApply()">Apply
+                Coordinates</button>
             </div>
           </div>
         </form>
@@ -144,7 +164,8 @@
           <i class="bi bi-exclamation-triangle-fill fs-5 text-danger"></i>
           <div>
             <strong class="text-danger" id="wt-error-title">Weather Retrieval Failed</strong>
-            <p class="small text-secondary m-0 mt-1" id="wt-error-message">Unable to fetch weather data for the specified coordinates.</p>
+            <p class="small text-secondary m-0 mt-1" id="wt-error-message">Unable to fetch weather data for the
+              specified coordinates.</p>
           </div>
         </div>
         <button type="button" class="btn btn-sm btn-outline-danger" onclick="retryCurrentWeather()">
@@ -158,7 +179,8 @@
       <div class="d-flex align-items-center gap-2 small">
         <i class="bi bi-cloud-slash text-warning fs-5"></i>
         <div>
-          <strong>Cached Advisory Notice:</strong> Live provider is temporarily unreachable. Displaying cached forecast data retrieved recently.
+          <strong>Cached Advisory Notice:</strong> Live provider is temporarily unreachable. Displaying cached forecast
+          data retrieved recently.
         </div>
       </div>
     </div>
@@ -196,7 +218,8 @@
 
         <div class="col-md-5">
           <div class="d-flex align-items-center justify-content-md-end gap-3 p-3 bg-light rounded-3 border">
-            <div class="fs-1 text-primary" id="wt-current-icon-wrap"><i class="bi bi-cloud-sun-fill" id="wt-current-icon"></i></div>
+            <div class="fs-1 text-primary" id="wt-current-icon-wrap"><i class="bi bi-cloud-sun-fill"
+                id="wt-current-icon"></i></div>
             <div>
               <div class="display-6 fw-bold text-dark m-0" id="wt-current-temp">27°C</div>
               <small class="text-muted d-block" id="wt-current-cond">Partly Cloudy</small>
@@ -229,7 +252,8 @@
               <span class="text-muted fs-6">/ 100</span>
             </div>
             <div class="progress mb-2" style="height: 8px;">
-              <div class="progress-bar bg-success" id="wt-score-bar" role="progressbar" style="width: 88%;" aria-valuenow="88" aria-valuemin="0" aria-valuemax="100"></div>
+              <div class="progress-bar bg-success" id="wt-score-bar" role="progressbar" style="width: 88%;"
+                aria-valuenow="88" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
             <p class="small text-secondary m-0" id="wt-score-summary">
               Optimal meteorological conditions for general travel and outdoor excursions.
@@ -244,7 +268,8 @@
       <!-- Actionable Weather Advice & Precautions -->
       <div class="col-md-8">
         <div class="tm-card p-3 h-100">
-          <h6 class="fw-bold text-dark mb-2"><i class="bi bi-lightbulb text-warning"></i> Actionable Travel Recommendations</h6>
+          <h6 class="fw-bold text-dark mb-2"><i class="bi bi-lightbulb text-warning"></i> Actionable Travel
+            Recommendations</h6>
           <div class="row g-2" id="wt-recommendations-list">
             <!-- Dynamic recommendation items -->
           </div>
@@ -254,7 +279,8 @@
 
     <!-- Activity Suitability Grid (6 Core Domains) -->
     <div class="mb-5">
-      <h5 class="fw-bold text-dark mb-3"><i class="bi bi-check2-circle text-primary"></i> Activity Suitability Ratings</h5>
+      <h5 class="fw-bold text-dark mb-3"><i class="bi bi-check2-circle text-primary"></i> Activity Suitability Ratings
+      </h5>
       <div class="row row-cols-1 row-cols-md-3 row-cols-lg-6 g-2" id="wt-activities-grid">
         <!-- Rendered via weather.js: Sightseeing, Hiking, Beach, Dining, Museum, Photography -->
       </div>
@@ -263,7 +289,8 @@
     <!-- ================= 5-DAY DAILY FORECAST ================= -->
     <div class="mb-5">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="fw-bold text-dark m-0"><i class="bi bi-calendar3-week text-primary"></i> Multi-Day Daily Forecast</h5>
+        <h5 class="fw-bold text-dark m-0"><i class="bi bi-calendar3-week text-primary"></i> Multi-Day Daily Forecast
+        </h5>
         <span class="small text-muted" id="wt-forecast-provider">Provider: Open-Meteo (CC BY 4.0)</span>
       </div>
       <div class="row row-cols-2 row-cols-md-5 g-3" id="wt-forecast-container">
@@ -273,7 +300,8 @@
 
     <!-- ================= 24-HOUR HOURLY PROJECTION ================= -->
     <div class="mb-5">
-      <h5 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history text-primary"></i> Hourly Projection (Next 24 Hours)</h5>
+      <h5 class="fw-bold text-dark mb-3"><i class="bi bi-clock-history text-primary"></i> Hourly Projection (Next 24
+        Hours)</h5>
       <div class="tm-card p-3 overflow-auto">
         <div class="d-flex gap-3 text-center pb-2" id="wt-hourly-container" style="min-width: 600px;">
           <!-- Hourly cards -->
@@ -314,7 +342,8 @@
             <h5 class="fw-bold text-dark mb-1" id="alt-dash-orig-name">Brindavan Gardens (Outdoor Fountain Walk)</h5>
             <div class="text-muted small mb-3" id="alt-dash-orig-cat">Outdoor Gardens & Fountains</div>
             <p class="small text-secondary mb-3">
-              Open terrace promenade and garden walk. Highly vulnerable to rain, slippery pathways, and fountain show cancellations during heavy showers.
+              Open terrace promenade and garden walk. Highly vulnerable to rain, slippery pathways, and fountain show
+              cancellations during heavy showers.
             </p>
             <span class="badge bg-danger-subtle text-danger border border-danger">
               <i class="bi bi-x-circle"></i> High Disruption Risk
@@ -326,10 +355,12 @@
         <div class="col-md-6">
           <div class="p-4 bg-success-subtle rounded-3 border border-success h-100">
             <span class="badge bg-success mb-2">RECOMMENDED SMART ALTERNATIVE</span>
-            <h5 class="fw-bold text-dark mb-1" id="alt-dash-rec-name">Mysuru Rail Museum & Sand Sculpture Art Gallery</h5>
+            <h5 class="fw-bold text-dark mb-1" id="alt-dash-rec-name">Mysuru Rail Museum & Sand Sculpture Art Gallery
+            </h5>
             <div class="text-muted small mb-3" id="alt-dash-rec-cat">Indoor Heritage & Covered Pavilions</div>
             <p class="small text-secondary mb-3">
-              100% sheltered exhibition hall featuring the historic Maharani dining carriage, vintage locomotives, and indoor sand art installations. Unaffected by rainfall.
+              100% sheltered exhibition hall featuring the historic Maharani dining carriage, vintage locomotives, and
+              indoor sand art installations. Unaffected by rainfall.
             </p>
             <span class="badge bg-success">
               <i class="bi bi-check-circle"></i> Weather-Proof & Safe
@@ -342,18 +373,21 @@
       <div class="p-3 bg-light rounded-3 border mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
           <span class="small text-muted d-block fw-semibold">ITINERARY IMPACT</span>
-          <span class="fw-bold text-dark" id="alt-dash-impact">Same duration (2h 15m), zero schedule delay • Saves ₹40</span>
+          <span class="fw-bold text-dark" id="alt-dash-impact">Same duration (2h 15m), zero schedule delay • Saves
+            ₹40</span>
         </div>
         <div>
-          <button type="button" class="tm-btn tm-btn-accent" id="alt-dash-action-btn" onclick="handleToggleWeatherAltDashboard()">
+          <button type="button" class="tm-btn tm-btn-accent" id="alt-dash-action-btn"
+            onclick="handleToggleWeatherAltDashboard()">
             Accept Smart Alternative
           </button>
         </div>
       </div>
 
       <div class="small text-muted border-top pt-3">
-        <i class="bi bi-info-circle-fill text-primary"></i> 
-        Accepting this replacement immediately updates your active Day 2 schedule in the <a href="workspace.html" class="fw-bold text-primary">Itinerary Workspace</a> and recalculates ticket expenses.
+        <i class="bi bi-info-circle-fill text-primary"></i>
+        Accepting this replacement immediately updates your active Day 2 schedule in the <a href="workspace.html"
+          class="fw-bold text-primary">Itinerary Workspace</a> and recalculates ticket expenses.
       </div>
     </div>
   </div>
@@ -365,4 +399,5 @@
   <script src="js/app.js"></script>
   <script src="js/weather.js"></script>
 </body>
+
 </html>

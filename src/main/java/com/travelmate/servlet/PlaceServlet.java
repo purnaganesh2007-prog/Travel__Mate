@@ -1,6 +1,7 @@
 package com.travelmate.servlet;
 
 import com.travelmate.geo.GeoService;
+import com.travelmate.geo.GoogleMapsClient;
 import com.travelmate.model.Place;
 import com.travelmate.util.JsonUtil;
 import jakarta.servlet.annotation.WebServlet;
@@ -14,9 +15,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Real place search, geocoding and reverse geocoding from OpenStreetMap.
+ * Real place search, geocoding and reverse geocoding from Google Maps
+ * (OpenStreetMap when TM_GOOGLE_MAPS_KEY is not configured).
  *
  * Supported endpoints:
+ *   GET /api/places/config
+ *   GET /api/places/reverse?placeId=ChIJ..&lat=..&lng=..   (Google place clicked on the map)
  *   GET /api/places/search?q=Mysore+Palace[&lat=..&lng=..][&category=..][&limit=..]
  *   GET /api/places/reverse?lat=..&lng=..
  *   GET /api/places/geocode?q=Chamundi+Hill[&destination=..][&lat=..&lng=..]
@@ -43,6 +47,7 @@ public class PlaceServlet extends HttpServlet {
                 case "search" -> handleSearch(req, resp);
                 case "reverse" -> handleReverse(req, resp);
                 case "geocode" -> handleGeocode(req, resp);
+                case "config" -> handleConfig(resp);
                 default -> JsonUtil.error(resp, 404, "Unknown endpoint");
             }
         } catch (IllegalArgumentException e) {
@@ -94,7 +99,30 @@ public class PlaceServlet extends HttpServlet {
         JsonUtil.ok(resp, body);
     }
 
+    /** Which map the pages should show, and the browser key to load Google Maps with. */
+    private void handleConfig(HttpServletResponse resp) throws IOException {
+        boolean google = geoService.isGoogleEnabled();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", true);
+        body.put("provider", google ? "google" : "osm");
+        body.put("mapsKey", google ? GoogleMapsClient.browserKey() : null);
+        JsonUtil.ok(resp, body);
+    }
+
     private void handleReverse(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        // A click on a Google map POI carries its place id: return that exact place
+        String placeId = req.getParameter("placeId");
+        if (placeId != null && !placeId.isBlank() && geoService.isGoogleEnabled()) {
+            try {
+                Place exact = geoService.placeDetails(placeId.trim());
+                if (exact != null && GeoService.isValidCoordinate(exact.lat, exact.lng)) {
+                    JsonUtil.ok(resp, exact);
+                    return;
+                }
+            } catch (IOException e) {
+                // fall through to the coordinates
+            }
+        }
         double[] p = parsePoint(req, true);
         if (p == null) {
             JsonUtil.error(resp, 400, "lat and lng are required");

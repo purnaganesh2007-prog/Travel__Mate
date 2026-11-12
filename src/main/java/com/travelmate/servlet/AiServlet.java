@@ -300,6 +300,8 @@ public class AiServlet extends ApiServlet {
         s.maxTokens = in.maxTokens;
         s.timeoutSeconds = in.timeoutSeconds;
         s.jsonMode = in.jsonMode;
+        s.reasoningEffort = in.reasoningEffort == null || in.reasoningEffort.isBlank() ? stored.reasoningEffort
+                : in.reasoningEffort.trim().toLowerCase();
         s.extraHeaders = in.extraHeaders == null ? stored.extraHeaders : in.extraHeaders;
         if (Boolean.TRUE.equals(in.clearApiKey)) {
             s.apiKey = "";
@@ -325,6 +327,9 @@ public class AiServlet extends ApiServlet {
             return "Max tokens must be between 1 and 1,000,000";
         if (s.timeoutSeconds < 1 || s.timeoutSeconds > 600)
             return "Timeout must be between 1 and 600 seconds";
+        if (s.reasoningEffort != null && !s.reasoningEffort.equals("default")
+                && !AiClient.REASONING_EFFORTS.contains(s.reasoningEffort))
+            return "Reasoning effort must be one of none, minimal, low, medium, high or default";
         return null;
     }
 
@@ -338,6 +343,7 @@ public class AiServlet extends ApiServlet {
         body.put("maxTokens", s.maxTokens);
         body.put("timeoutSeconds", s.timeoutSeconds);
         body.put("jsonMode", s.jsonMode);
+        body.put("reasoningEffort", s.reasoningEffort);
         body.put("extraHeaders", s.extraHeaders);
         boolean hasKey = !isBlank(s.apiKey);
         body.put("apiKeySet", hasKey);

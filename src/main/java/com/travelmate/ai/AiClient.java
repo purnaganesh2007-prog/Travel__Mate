@@ -15,6 +15,10 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Minimal client for OpenAI-compatible APIs (POST {baseUrl}/chat/completions,
@@ -28,6 +32,70 @@ public class AiClient {
         public AiException(String message) {
             super(message);
         }
+    }
+
+    /** A non-2xx reply from the AI server. */
+    private static class AiHttpException extends AiException {
+        final int status;
+        final String detail;
+
+        AiHttpException(String message, int status, String detail) {
+            super(message);
+            this.status = status;
+            this.detail = detail == null ? "" : detail;
+        }
+    }
+
+    /** The reply stopped at the output limit (finish_reason "length"). */
+    private static class CutOffException extends AiException {
+        CutOffException(String message) {
+            super(message);
+        }
+    }
+
+    /** Which optional request parameters a provider/model accepts, learned from its HTTP 400 replies. */
+    private static class Quirks {
+        volatile String effort;
+        volatile boolean noTemperature;
+        volatile boolean noResponseFormat;
+        volatile boolean maxCompletionTokens;
+
+        Quirks(String effort) {
+            this.effort = effort;
+        }
+
+        /** Changes the request to avoid the parameter the error names; false when there is nothing left to change. */
+        synchronized boolean adaptTo(String error) {
+            String e = error.toLowerCase(Locale.ROOT);
+            if (e.contains("reasoning") && effort != null) {
+                // Some models cannot switch reasoning off: fall back to the lightest setting, then to the default
+                effort = effort.equals("none") || effort.equals("minimal") ? "low" : null;
+                return true;
+            }
+            if (e.contains("max_completion_tokens") && !maxCompletionTokens) {
+                maxCompletionTokens = true;
+                return true;
+            }
+            if (e.contains("temperature") && !noTemperature) {
+                noTemperature = true;
+                return true;
+            }
+            if (e.contains("response_format") && !noResponseFormat) {
+                noResponseFormat = true;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    private static final Map<String, Quirks> QUIRKS = new ConcurrentHashMap<>();
+
+    /** Reasoning efforts that can be sent; anything else (blank, "default") sends no reasoning_effort. */
+    public static final Set<String> REASONING_EFFORTS = Set.of("none", "minimal", "low", "medium", "high");
+
+    private static String normalizeEffort(String effort) {
+        String e = effort == null ? "" : effort.trim().toLowerCase(Locale.ROOT);
+        return REASONING_EFFORTS.contains(e) ? e : null;
     }
 
     private final AiSettings settings;
@@ -50,22 +118,69 @@ public class AiClient {
 
     /** Sends a system + user message and returns the assistant's text. */
     public String chat(String system, String user) throws AiException {
+        return chat(system, user, 0);
+    }
+
+    /**
+     * Sends a system + user message and returns the assistant's text.
+     *
+     * minOutputTokens is the caller's estimate of how long the reply will be; the output limit
+     * sent to the provider is the larger of that and the "Max tokens" setting, so a long trip
+     * is not cut off by a limit meant for a short one.
+     *
+     * Providers and models differ in which optional parameters they accept. A request refused
+     * because of one of them (reasoning effort, temperature, JSON mode, the name of the output
+     * limit) is retried without it, and what worked is remembered for that model. A reply cut
+     * off at the output limit is retried once with a larger limit.
+     */
+    public String chat(String system, String user, int minOutputTokens) throws AiException {
+        String effort = normalizeEffort(settings.reasoningEffort);
+        String quirksKey = (settings.baseUrl == null ? "" : settings.baseUrl.trim()) + "|" + settings.model
+                + "|" + effort;
+        Quirks q = QUIRKS.computeIfAbsent(quirksKey, k -> new Quirks(effort));
+        int maxTokens = settings.maxTokens > 0 ? Math.max(settings.maxTokens, minOutputTokens) : 0;
+        boolean retriedForLength = false;
+
+        for (int attempt = 0;; attempt++) {
+            JsonObject response;
+            try {
+                response = send(request("/chat/completions")
+                        .POST(HttpRequest.BodyPublishers.ofString(JsonUtil.GSON.toJson(
+                                chatBody(system, user, maxTokens, q)))));
+            } catch (AiHttpException e) {
+                if (e.status == 400 && attempt < 6 && q.adaptTo(e.detail)) continue;
+                throw e;
+            }
+            try {
+                return replyText(response);
+            } catch (CutOffException e) {
+                if (retriedForLength || maxTokens <= 0) throw e;
+                // Hidden reasoning tokens count against the limit too: give the model room and try once more
+                retriedForLength = true;
+                maxTokens = Math.min(Math.max(maxTokens * 3, 12_000), 64_000);
+            }
+        }
+    }
+
+    private JsonObject chatBody(String system, String user, int maxTokens, Quirks q) {
         JsonObject body = new JsonObject();
         body.addProperty("model", settings.model);
         JsonArray messages = new JsonArray();
         messages.add(message("system", system));
         messages.add(message("user", user));
         body.add("messages", messages);
-        body.addProperty("temperature", settings.temperature);
-        if (settings.maxTokens > 0) body.addProperty("max_tokens", settings.maxTokens);
-        if (settings.jsonMode) {
+        if (!q.noTemperature) body.addProperty("temperature", settings.temperature);
+        if (maxTokens > 0) body.addProperty(q.maxCompletionTokens ? "max_completion_tokens" : "max_tokens", maxTokens);
+        if (q.effort != null) body.addProperty("reasoning_effort", q.effort);
+        if (settings.jsonMode && !q.noResponseFormat) {
             JsonObject format = new JsonObject();
             format.addProperty("type", "json_object");
             body.add("response_format", format);
         }
+        return body;
+    }
 
-        JsonObject response = send(request("/chat/completions")
-                .POST(HttpRequest.BodyPublishers.ofString(JsonUtil.GSON.toJson(body))));
+    private String replyText(JsonObject response) throws AiException {
         JsonArray choices = response.has("choices") && response.get("choices").isJsonArray()
                 ? response.getAsJsonArray("choices") : null;
         if (choices == null || choices.isEmpty() || !choices.get(0).isJsonObject()) {
@@ -78,7 +193,7 @@ public class AiClient {
                 ? first.getAsJsonObject("message") : null;
         String text = msg == null ? null : contentText(msg.get("content"));
         if ("length".equalsIgnoreCase(finishReason)) {
-            throw new AiException("The AI provider cut off the itinerary because its output limit was reached. "
+            throw new CutOffException("The AI provider cut off the itinerary because its output limit was reached. "
                     + "Choose a model with a larger output limit or reduce the trip length.");
         }
         if (text == null || text.isBlank()) {
@@ -172,7 +287,8 @@ public class AiClient {
                 case 429 -> " — rate limit or no credits left on this key.";
                 default -> "";
             };
-            throw new AiException(sanitize("AI server returned HTTP " + resp.statusCode() + ": " + detail + hint));
+            throw new AiHttpException(sanitize("AI server returned HTTP " + resp.statusCode() + ": " + detail + hint),
+                    resp.statusCode(), detail);
         }
         if (json == null) throw new AiException(sanitize("AI server reply was not JSON: " + snippet(text)));
         if (json.has("error")) throw new AiException(sanitize("AI server error: " + errorMessage(json)));

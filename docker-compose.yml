@@ -38,6 +38,8 @@ services:
       TM_AI_MODEL: "${TM_AI_MODEL:-gemini-2.5-flash}"
       TM_AI_API_KEY: "${TM_AI_API_KEY:-}"
       TM_AI_ALLOWED_EMAILS: "${TM_AI_ALLOWED_EMAILS:-admin@example.com}"
+      TM_GOOGLE_MAPS_KEY: "${TM_GOOGLE_MAPS_KEY:-}"
+      TM_GOOGLE_MAPS_BROWSER_KEY: "${TM_GOOGLE_MAPS_BROWSER_KEY:-}"
       TM_GEO_URL: "${TM_GEO_URL:-https://nominatim.openstreetmap.org}"
       TM_WEATHER_URL: "${TM_WEATHER_URL:-https://api.open-meteo.com/v1/forecast}"
       PORT: "8080"

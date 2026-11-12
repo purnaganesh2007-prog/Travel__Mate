@@ -10,6 +10,12 @@ public class AiSettings {
     public int maxTokens = 4000;
     public int timeoutSeconds = 90;
     public boolean jsonMode;
+    /**
+     * How much hidden "thinking" a reasoning model does before answering: none, minimal, low,
+     * medium, high, or "default" to leave it to the provider. Thinking is slow and uses up the
+     * output limit, so itineraries are generated with "none" unless changed.
+     */
+    public String reasoningEffort = "none";
     /** "Name: value" pairs, one per line. */
     public String extraHeaders;
 

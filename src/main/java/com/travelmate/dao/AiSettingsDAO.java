@@ -41,6 +41,7 @@ public class AiSettingsDAO {
         values.put("maxTokens", String.valueOf(s.maxTokens));
         values.put("timeoutSeconds", String.valueOf(s.timeoutSeconds));
         values.put("jsonMode", String.valueOf(s.jsonMode));
+        values.put("reasoningEffort", s.reasoningEffort == null ? "none" : s.reasoningEffort);
         values.put("extraHeaders", s.extraHeaders);
         try (Connection con = DBConnection.getConnection()) {
             con.setAutoCommit(false);
@@ -87,6 +88,7 @@ public class AiSettingsDAO {
         env(values, "TM_AI_MAX_TOKENS", "maxTokens");
         env(values, "TM_AI_TIMEOUT_SECONDS", "timeoutSeconds");
         env(values, "TM_AI_JSON_MODE", "jsonMode");
+        env(values, "TM_AI_REASONING_EFFORT", "reasoningEffort");
         // Setting a key and model through the environment implies "enabled"
         String key = values.get("apiKey");
         String mod = values.get("model");
@@ -110,6 +112,8 @@ public class AiSettingsDAO {
         s.maxTokens = (int) parseDouble(v.get("maxTokens"), 4000);
         s.timeoutSeconds = (int) parseDouble(v.get("timeoutSeconds"), 90);
         s.jsonMode = Boolean.parseBoolean(v.getOrDefault("jsonMode", "false"));
+        String effort = v.get("reasoningEffort");
+        s.reasoningEffort = effort == null || effort.isBlank() ? "none" : effort.trim().toLowerCase();
         // \n written literally in ai.properties means a new header line
         s.extraHeaders = v.getOrDefault("extraHeaders", "").replace("\\n", "\n");
         return s;

@@ -1,23 +1,25 @@
 /**
  * TRAVELMATE — REAL PLACES FROM THE MAP + AI TOUR PLAN (workspace.html)
  *
- * - Search places or click the map: details come from OpenStreetMap via /api/places/*
+ * - Search places or click the map: details come from Google Maps (OpenStreetMap when the server has
+ *   no Google key) via /api/places/*
  * - "Add to Day N" saves the place (name, coordinates, address, hours, website) as a stop in the database
  * - The AI tour plan runs automatically when a trip is opened (new or already saved): the trip's stops are
  *   sent to /api/ai/tour-plan and the timed plan it returns is saved. Once saved the trip is marked
  *   aiPlanned, so it is not re-planned (and the person's edits are not overwritten) on every visit.
  *
- * Uses globals from workspace.js: mapInstance, activeDayNumber, tripCenter(),
+ * Uses window.TMMap (map-provider.js) and globals from workspace.js: activeDayNumber, tripCenter(),
  * renderTimelineForDay(), syncMapToCurrentDay(), renderDayTabs().
  */
 
-let placePreviewMarker = null;
 let lastPlaceResults = [];
 
-document.addEventListener("DOMContentLoaded", () => {
-  if (!mapInstance) return;
-  mapInstance.on("click", (e) => handleMapClick(e.latlng));
-});
+window.TMMap.onClick((point) => handleMapClick(point));
+
+/** Which map a stop's place link came from: a Google place id or an OpenStreetMap object. */
+function mapSourceName(placeRef) {
+  return String(placeRef || "").startsWith("google:") ? "Google Maps" : "OpenStreetMap";
+}
 
 /** Small details line under a stop card: address, opening hours, website. */
 function placeDetailsHtml(stop) {
@@ -27,7 +29,12 @@ function placeDetailsHtml(stop) {
   if (stop.website && /^https?:\/\//i.test(stop.website)) {
     bits.push(`<a href="${escapeHtml(stop.website)}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><i class="bi bi-box-arrow-up-right"></i> Website</a>`);
   }
-  if (stop.placeRef) bits.push(`<span class="text-success" title="Matched to a real OpenStreetMap place"><i class="bi bi-patch-check"></i> Verified on map</span>`);
+  if (stop.placeRef) bits.push(`<span class="text-success" title="Matched to a real ${mapSourceName(stop.placeRef)} place"><i class="bi bi-patch-check"></i> Verified on ${mapSourceName(stop.placeRef)}</span>`);
+  if (stop.name) {
+    const destination = window.TravelMateStore.getActiveTrip().destination;
+    bits.push(`<a href="${escapeHtml(googleMapsPlaceUrl(stop, destination))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Opens the Google Maps app on a phone"><i class="bi bi-google"></i> Open in Google Maps</a>`);
+    bits.push(`<a href="${escapeHtml(googleMapsDirectionsUrl(stop, destination))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Navigate here from your current location"><i class="bi bi-sign-turn-right"></i> Directions</a>`);
+  }
   return bits.length ? `<div class="d-flex flex-wrap gap-2 mt-2 text-muted" style="font-size:0.75rem">${bits.join("")}</div>` : "";
 }
 
@@ -43,7 +50,7 @@ async function handleMapSearch(event) {
     return;
   }
   box.classList.remove("d-none");
-  box.innerHTML = `<div class="p-2 text-muted"><span class="spinner-border spinner-border-sm"></span> Searching OpenStreetMap…</div>`;
+  box.innerHTML = `<div class="p-2 text-muted"><span class="spinner-border spinner-border-sm"></span> Searching ${window.TMMap.providerName()}…</div>`;
   const [lat, lng] = tripCenter();
   try {
     const { places } = await window.TravelMateStore.request("GET",
@@ -65,7 +72,8 @@ async function handleMapClick(latlng) {
   if (!window.TravelMateStore.isOnline()) return;
   showPlacePopup(latlng, `<div class="small text-muted"><span class="spinner-border spinner-border-sm"></span> Looking up this spot…</div>`);
   try {
-    const place = await window.TravelMateStore.request("GET", `/places/reverse?lat=${latlng.lat}&lng=${latlng.lng}`);
+    const placeId = latlng.placeId ? `&placeId=${encodeURIComponent(latlng.placeId)}` : "";
+    const place = await window.TravelMateStore.request("GET", `/places/reverse?lat=${latlng.lat}&lng=${latlng.lng}${placeId}`);
     previewPlace(place, false);
   } catch (err) {
     showPlacePopup(latlng, `<div class="small text-danger">${escapeHtml(err.message)}</div>`);
@@ -80,6 +88,8 @@ function previewPlace(place, fly = true) {
     `<option value="${d.dayNumber}" ${d.dayNumber === activeDayNumber ? "selected" : ""}>Day ${d.dayNumber}</option>`).join("");
   const website = place.website && /^https?:\/\//i.test(place.website)
     ? `<div><i class="bi bi-globe"></i> <a href="${escapeHtml(place.website)}" target="_blank" rel="noopener">${escapeHtml(place.website.replace(/^https?:\/\//, "").slice(0, 40))}</a></div>` : "";
+  const mapsUrl = place.mapsUrl && /^https:\/\//i.test(place.mapsUrl)
+    ? place.mapsUrl : googleMapsPlaceUrl(place, trip.destination);
   const html = `
     <div style="min-width: 220px; max-width: 260px;">
       <div class="fw-bold" style="font-size:14px">${escapeHtml(place.name)}</div>
@@ -88,21 +98,18 @@ function previewPlace(place, fly = true) {
       ${place.openingHours ? `<div style="font-size:12px"><i class="bi bi-clock-history"></i> ${escapeHtml(place.openingHours)}</div>` : ""}
       ${place.phone ? `<div style="font-size:12px"><i class="bi bi-telephone"></i> ${escapeHtml(place.phone)}</div>` : ""}
       <div style="font-size:12px">${website}</div>
+      <div style="font-size:12px"><i class="bi bi-google"></i> <a href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener">Open in Google Maps</a></div>
       <div class="d-flex gap-1 mt-2">
         <select class="form-select form-select-sm" id="place-add-day" style="width:auto">${dayOptions}</select>
         <button type="button" class="btn btn-sm btn-primary flex-grow-1" onclick="addPreviewedPlace()"><i class="bi bi-plus-lg"></i> Add to trip</button>
       </div>
     </div>`;
-  const latlng = L.latLng(place.lat, place.lng);
-  showPlacePopup(latlng, html);
-  if (fly) mapInstance.flyTo(latlng, Math.max(mapInstance.getZoom(), 15), { duration: 0.6 });
+  showPlacePopup({ lat: place.lat, lng: place.lng }, html);
+  if (fly) window.TMMap.flyTo([place.lat, place.lng], 15);
 }
 
 function showPlacePopup(latlng, html) {
-  if (!placePreviewMarker) {
-    placePreviewMarker = L.circleMarker(latlng, { radius: 9, color: "#E76F51", weight: 3, fillColor: "#fff", fillOpacity: 1, bubblingMouseEvents: false }).addTo(mapInstance);
-  }
-  placePreviewMarker.setLatLng(latlng).bindPopup(html, { maxWidth: 280 }).openPopup();
+  window.TMMap.showPreview(latlng, html);
 }
 
 /** Save the previewed map place as a stop on the chosen day (stored in the database). */
@@ -132,10 +139,7 @@ function addPreviewedPlace() {
       "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=600&q=80"
   };
   window.TravelMateStore.addStopToDay(dayNumber, stop);
-  if (placePreviewMarker) {
-    mapInstance.removeLayer(placePreviewMarker);
-    placePreviewMarker = null;
-  }
+  window.TMMap.clearPreview();
   document.getElementById("ws-place-results").classList.add("d-none");
   if (dayNumber !== activeDayNumber) switchActiveDay(dayNumber);
   else {

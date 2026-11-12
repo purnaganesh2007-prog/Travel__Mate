@@ -1,19 +1,17 @@
 /**
  * TRAVELMATE — MAIN WORKSPACE & ITINERARY LOGIC (PAGE 4)
- * Wanderlog-inspired two-column synchronized itinerary and Leaflet interactive map.
+ * Wanderlog-inspired two-column synchronized itinerary and interactive map.
+ * The map itself (Google Maps, or Leaflet/OpenStreetMap as fallback) lives in map-provider.js (window.TMMap).
  */
 
 let activeDayNumber = 1;
-let mapInstance = null;
-let mapMarkers = [];
-let mapRouteLine = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   // Load active trip from store
   renderTripHeader();
   renderDayTabs();
   renderTimelineForDay(activeDayNumber);
-  initLeafletMap();
+  initWorkspaceMap();
 
   // Mobile switcher
   setupMobileSwitcher();
@@ -25,7 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderTripHeader();
     renderDayTabs();
     renderTimelineForDay(activeDayNumber);
-    if (mapInstance) mapInstance.setView(tripCenter(), 13);
+    window.TMMap.setView(tripCenter(), 13);
     syncMapToCurrentDay();
   });
 });
@@ -340,118 +338,71 @@ async function fetchDayWeather(dayNumber) {
   }
 }
 
-// Leaflet Map Initialization
-function initLeafletMap() {
-  const mapContainer = document.getElementById("ws-map-container");
-  if (!mapContainer) return;
-
-  if (typeof L === "undefined") {
-    mapContainer.innerHTML = `
-      <div class="p-4 text-center h-100 d-flex flex-column align-items-center justify-content-center bg-light">
-        <i class="bi bi-map text-primary fs-1 mb-2"></i>
-        <h5 class="fw-bold">Interactive Map Ready</h5>
-        <p class="text-muted small">Leaflet map script loading... Markers are synchronized with itinerary timeline.</p>
-      </div>
-    `;
-    return;
-  }
-
-  mapInstance = L.map('ws-map-container', {
-    zoomControl: true,
-    scrollWheelZoom: true
-  }).setView(tripCenter(), 13);
-
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  }).addTo(mapInstance);
-
-  syncMapToCurrentDay();
+// Map initialization: Google Maps when the server has a key, else Leaflet + OpenStreetMap
+function initWorkspaceMap() {
+  if (!document.getElementById("ws-map-container")) return;
+  document.addEventListener("tm:map-ready", () => {
+    const google = window.TMMap.getProvider() === "google";
+    const credit = document.getElementById("ws-map-credit");
+    if (credit) credit.textContent = google ? "Places and map by Google Maps." : "Data © OpenStreetMap contributors.";
+    // Keep the legend clear of the Google logo in the map's bottom-left corner
+    const legend = document.getElementById("ws-map-legend");
+    if (legend) legend.style.marginBottom = google ? "34px" : "";
+    syncMapToCurrentDay();
+  });
+  window.TMMap.init("ws-map-container", tripCenter(), 13);
 }
 
-// Synchronize Map Markers & Polylines for Active Day
+// Synchronize Map Markers & Route Line for Active Day
 function syncMapToCurrentDay() {
-  if (!mapInstance) return;
-
-  // Clear existing markers & route lines
-  mapMarkers.forEach(m => mapInstance.removeLayer(m));
-  mapMarkers = [];
-  if (mapRouteLine) {
-    mapInstance.removeLayer(mapRouteLine);
-    mapRouteLine = null;
-  }
+  if (!window.TMMap.isReady()) return;
 
   const trip = window.TravelMateStore.getActiveTrip();
   const targetDay = trip.days.find(d => d.dayNumber === activeDayNumber) || trip.days[0];
-  if (!targetDay || !targetDay.stops || targetDay.stops.length === 0) return;
+  const stops = (targetDay && targetDay.stops) || [];
 
-  const latLngs = [];
-
-  targetDay.stops.forEach((stop, index) => {
-    if (stop.lat && stop.lng) {
-      const pos = [stop.lat, stop.lng];
-      latLngs.push(pos);
-
-      // Custom HTML Numbered Pin Icon
-      const customIcon = L.divIcon({
-        className: 'tm-custom-marker',
-        html: `
-          <div style="background-color: var(--tm-primary); color: #fff; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
-            ${index + 1}
-          </div>
-        `,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
-      });
-
-      const marker = L.marker(pos, { icon: customIcon }).addTo(mapInstance);
-
-      // Popup Content
-      marker.bindPopup(`
-        <div style="min-width: 180px;">
-          <h6 style="margin: 0 0 4px; font-weight: bold; font-size: 14px;">${escapeHtml(stop.name)}</h6>
-          <div style="font-size: 12px; color: #64748B; margin-bottom: 6px;">
-            <i class="bi bi-clock"></i> ${escapeHtml(stop.time)} &bull; ${escapeHtml(stop.category)}
-          </div>
-          <p style="font-size: 11px; margin: 0; line-height: 1.3;">${escapeHtml(stop.notes)}</p>
+  const items = stops.map((stop, index) => ({
+    id: stop.id,
+    lat: stop.lat,
+    lng: stop.lng,
+    label: index + 1,
+    html: `
+      <div style="min-width: 180px;">
+        <h6 style="margin: 0 0 4px; font-weight: bold; font-size: 14px;">${escapeHtml(stop.name)}</h6>
+        <div style="font-size: 12px; color: #64748B; margin-bottom: 6px;">
+          <i class="bi bi-clock"></i> ${escapeHtml(stop.time)} &bull; ${escapeHtml(stop.category)}
         </div>
-      `);
+        <p style="font-size: 11px; margin: 0 0 6px; line-height: 1.3;">${escapeHtml(stop.notes)}</p>
+        <div style="font-size: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
+          <a href="${escapeHtml(googleMapsPlaceUrl(stop, trip.destination))}" target="_blank" rel="noopener"><i class="bi bi-google"></i> Open in Google Maps</a>
+          <a href="${escapeHtml(googleMapsDirectionsUrl(stop, trip.destination))}" target="_blank" rel="noopener"><i class="bi bi-sign-turn-right"></i> Directions</a>
+        </div>
+      </div>`
+  }));
 
-      // Marker Click -> Highlight Timeline Card
-      marker.on('click', () => {
-        highlightStopCard(stop.id);
-      });
+  // Pin click -> highlight the timeline card
+  window.TMMap.showStops(items, highlightStopCard);
+}
 
-      mapMarkers.push(marker);
-    }
-  });
-
-  // Draw Polyline Route connecting stops
-  if (latLngs.length > 1) {
-    mapRouteLine = L.polyline(latLngs, {
-      color: '#E76F51',
-      weight: 4,
-      opacity: 0.85,
-      dashArray: '6, 8'
-    }).addTo(mapInstance);
-
-    mapInstance.fitBounds(mapRouteLine.getBounds(), { padding: [50, 50] });
-  } else if (latLngs.length === 1) {
-    mapInstance.setView(latLngs[0], 14);
+// Open the active day's whole route in Google Maps (the Google Maps app, on a phone)
+function openDayInGoogleMaps() {
+  const trip = window.TravelMateStore.getActiveTrip();
+  const targetDay = trip.days.find(d => d.dayNumber === activeDayNumber) || trip.days[0];
+  const url = googleMapsRouteUrl(targetDay ? targetDay.stops : [], trip.destination);
+  if (!url) {
+    showToast("Add a stop to this day first", "warning", "bi-geo");
+    return;
   }
+  window.open(url, "_blank", "noopener");
 }
 
 // Timeline Card Click -> Pan Map & Highlight
 function handleStopCardClick(stopId, lat, lng) {
   highlightStopCard(stopId);
 
-  if (mapInstance && lat && lng) {
-    mapInstance.flyTo([lat, lng], 15, { duration: 0.8 });
-    const targetMarker = mapMarkers.find(m => {
-      const pos = m.getLatLng();
-      return Math.abs(pos.lat - lat) < 0.001 && Math.abs(pos.lng - lng) < 0.001;
-    });
-    if (targetMarker) targetMarker.openPopup();
+  if (window.TMMap.isReady() && lat && lng) {
+    window.TMMap.flyTo([lat, lng], 15);
+    window.TMMap.openStopPopup(stopId);
   }
 }
 
@@ -647,9 +598,7 @@ function setupMobileSwitcher() {
       btnMap.classList.add("active");
       btnItinerary.classList.remove("active");
       document.body.classList.add("view-map-active");
-      if (mapInstance) {
-        setTimeout(() => mapInstance.invalidateSize(), 200);
-      }
+      setTimeout(() => window.TMMap.resize(), 200);
     });
   }
 }
@@ -680,7 +629,7 @@ window.workspaceTripReady = (async () => {
     renderTripHeader();
     renderDayTabs();
     renderTimelineForDay(activeDayNumber);
-    if (mapInstance) mapInstance.setView(tripCenter(), 13);
+    window.TMMap.setView(tripCenter(), 13);
     syncMapToCurrentDay();
   } catch (err) {
     showToast(`Could not open that trip: ${err.message}`, "danger", "bi-exclamation-octagon");
@@ -694,6 +643,7 @@ window.openEditStopModal = openEditStopModal;
 window.handleSaveNewStop = handleSaveNewStop;
 window.confirmDeleteStop = confirmDeleteStop;
 window.handleOptimizeRoute = handleOptimizeRoute;
+window.openDayInGoogleMaps = openDayInGoogleMaps;
 window.handleAddDay = handleAddDay;
 window.openWeatherAltModal = openWeatherAltModal;
 window.handleToggleWeatherAlt = handleToggleWeatherAlt;

@@ -43,6 +43,8 @@ function fillForm(s) {
   $("ai-max-tokens").value = s.maxTokens;
   $("ai-timeout").value = s.timeoutSeconds;
   $("ai-json-mode").checked = s.jsonMode;
+  $("ai-reasoning-effort").value = s.reasoningEffort || "none";
+  if (!$("ai-reasoning-effort").value) $("ai-reasoning-effort").value = "none";
   $("ai-extra-headers").value = s.extraHeaders || "";
   $("ai-api-key").value = "";
   $("ai-api-key").placeholder = s.apiKeySet ? `Saved key: ${s.apiKeyPreview} (leave empty to keep it)` : "Paste your key";
@@ -65,6 +67,7 @@ function readForm() {
     maxTokens: Number($("ai-max-tokens").value || 4000),
     timeoutSeconds: Number($("ai-timeout").value || 90),
     jsonMode: $("ai-json-mode").checked,
+    reasoningEffort: $("ai-reasoning-effort").value,
     extraHeaders: $("ai-extra-headers").value
   };
 }
