@@ -1780,13 +1780,75 @@ const TM_CITY_COORDINATES = {
   "agra": [27.1767, 78.0081],
   "varanasi": [25.3176, 82.9739],
   "kochi": [9.9312, 76.2673],
+  "cochin": [9.9312, 76.2673],
   "visakhapatnam": [17.6868, 83.2185],
+  "vizag": [17.6868, 83.2185],
   "vijayawada": [16.5062, 80.6480],
   "udaipur": [24.5854, 73.7125],
   "amritsar": [31.6340, 74.8723],
   "chandigarh": [30.7333, 76.7794],
+  "ooty": [11.4102, 76.6950],
+  "munnar": [10.0889, 77.0595],
+  "pondicherry": [11.9416, 79.8083],
+  "puducherry": [11.9416, 79.8083],
+  "shimla": [31.1048, 77.1734],
+  "manali": [32.2432, 77.1892],
+  "rishikesh": [30.0869, 78.2676],
+  "haridwar": [29.9457, 78.1642],
+  "kodaikanal": [10.2381, 77.4892],
+  "hampi": [15.3350, 76.4600],
+  "madurai": [9.9252, 78.1198],
+  "alleppey": [9.4981, 76.3388],
+  "alappuzha": [9.4981, 76.3388],
+  "coorg": [12.4244, 75.7382],
+  "madikeri": [12.4244, 75.7382],
+  "wayanad": [11.6854, 76.1320],
+  "gokarna": [14.5479, 74.3188],
+  "darjeeling": [27.0410, 88.2663],
+  "gangtok": [27.3389, 88.6065],
+  "puri": [19.8135, 85.8312],
+  "bhubaneswar": [20.2961, 85.8245],
+  "lucknow": [26.8467, 80.9462],
+  "srinagar": [34.0837, 74.7973],
+  "leh": [34.1526, 77.5771],
+  "shillong": [25.5788, 91.8933],
+  "guwahati": [26.1445, 91.7362],
+  "jodhpur": [26.2389, 73.0243],
+  "jaisalmer": [26.9157, 70.9083],
+  "pushkar": [26.4897, 74.5511],
+  "rameswaram": [9.2876, 79.3129],
+  "kanyakumari": [8.0883, 77.5385],
+  "tiruvannamalai": [12.2253, 79.0747],
+  "ayodhya": [26.7922, 82.1998],
+  "shirdi": [19.7667, 74.4762],
   "dubai": [25.2048, 55.2708]
 };
+
+async function tmResolveCityCoordinates(cityName, fallbackCoord) {
+  if (!cityName) return fallbackCoord;
+  const raw = String(cityName).trim().toLowerCase();
+  const clean = raw.split(",")[0].replace(/\([^)]*\)/g, "").trim();
+  if (TM_CITY_COORDINATES[clean]) return TM_CITY_COORDINATES[clean];
+
+  for (const [k, v] of Object.entries(TM_CITY_COORDINATES)) {
+    if (clean.includes(k) || k.includes(clean)) return v;
+  }
+
+  try {
+    const store = window.TravelMateStore;
+    if (store) {
+      const hits = await store.request("GET", "/geo/search?q=" + encodeURIComponent(clean));
+      if (Array.isArray(hits) && hits.length > 0 && hits[0].lat && hits[0].lng) {
+        const coord = [Number(hits[0].lat), Number(hits[0].lng)];
+        TM_CITY_COORDINATES[clean] = coord;
+        return coord;
+      }
+    }
+  } catch (err) {
+    console.warn("Geocoding lookup fallback failed for", cityName, err);
+  }
+  return fallbackCoord;
+}
 
 async function initTransportMap() {
   const container = document.getElementById("transport-map-container");
@@ -1798,8 +1860,8 @@ async function initTransportMap() {
 
   const fromHub = tmResolveTransitCodes(from);
   const toHub = tmResolveTransitCodes(to);
-  const fromCity = fromHub ? fromHub.city : from;
-  const toCity = toHub ? toHub.city : to;
+  const fromCity = fromHub ? fromHub.city : from.split(",")[0].trim();
+  const toCity = toHub ? toHub.city : to.split(",")[0].trim();
 
   // Direct Google Maps Directions link
   const gmapsLink = document.getElementById("tr-gmaps-link");
@@ -1810,10 +1872,8 @@ async function initTransportMap() {
   }
 
   // Lookup coordinates for distance calculation and map markers
-  const fromKey = fromCity.toLowerCase().trim();
-  const toKey = toCity.toLowerCase().trim();
-  const fromCoord = TM_CITY_COORDINATES[fromKey] || [12.9716, 77.5946];
-  const toCoord = TM_CITY_COORDINATES[toKey] || [12.2958, 76.6394];
+  const fromCoord = await tmResolveCityCoordinates(fromCity, [12.9716, 77.5946]);
+  const toCoord = await tmResolveCityCoordinates(toCity, [12.2958, 76.6394]);
 
   // Calculate highway distance with road winding factor
   const dLat = (toCoord[0] - fromCoord[0]) * Math.PI / 180;
@@ -1841,6 +1901,11 @@ async function initTransportMap() {
         { id: "origin", lat: fromCoord[0], lng: fromCoord[1], label: "1", html: `<strong>${fromCity}</strong><br>Origin` },
         { id: "dest", lat: toCoord[0], lng: toCoord[1], label: "2", html: `<strong>${toCity}</strong><br>Destination` }
       ]);
+      setTimeout(() => {
+        if (window.TMMap && typeof window.TMMap.resize === "function") {
+          window.TMMap.resize();
+        }
+      }, 150);
     } catch (err) {
       console.warn("Transport route map initialization error:", err);
     }

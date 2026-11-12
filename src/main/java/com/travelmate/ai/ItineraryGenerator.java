@@ -76,10 +76,10 @@ public class ItineraryGenerator {
     private static final int GOOGLE_MAX_GEOCODE_LOOKUPS = 80;
     private static final long GOOGLE_GEOCODE_TIME_BUDGET_MS = 12_000;
     /** Trips longer than this are written in parts, in parallel (see generateInParts). */
-    private static final int SINGLE_CALL_MAX_DAYS = 4;
+    private static final int SINGLE_CALL_MAX_DAYS = 7;
     private static final int DAYS_PER_PART = 3;
     /** Rough size of one stop in the model's JSON reply, used to size the output limit. */
-    private static final int TOKENS_PER_STOP = 230;
+    private static final int TOKENS_PER_STOP = 250;
 
     /** Runs model calls and map lookups side by side. Daemon threads: never keeps the server alive. */
     private static final ExecutorService POOL = Executors.newCachedThreadPool(r -> {
@@ -128,7 +128,7 @@ public class ItineraryGenerator {
         if (days > SINGLE_CALL_MAX_DAYS) {
             // Long trip: a short outline first, then the days are written in parallel
             String outlineReply = new AiClient(settings, httpClient).chat(SYSTEM_PROMPT, outlinePrompt(req, days),
-                    400 + days * maxStopsPerDay(req.pace) * 30);
+                    Math.max(3500, outputTokens(days * maxStopsPerDay(req.pace))));
             JsonObject outline = extractJson(outlineReply);
             if (isOutline(outline)) {
                 result.title = str(outline, "title", req.destination + " Tailored Journey");
@@ -138,8 +138,9 @@ public class ItineraryGenerator {
                 json = outline;
             }
         } else {
-            json = extractJson(new AiClient(settings, httpClient).chat(SYSTEM_PROMPT, userPrompt(req, days),
-                    outputTokens(days * maxStopsPerDay(req.pace))));
+            String raw = new AiClient(settings, httpClient).chat(SYSTEM_PROMPT, userPrompt(req, days),
+                    outputTokens(days * maxStopsPerDay(req.pace)));
+            json = extractJson(raw);
         }
 
         double[] center = await(centerLookup);
@@ -180,9 +181,9 @@ public class ItineraryGenerator {
         };
     }
 
-    /** Output limit that fits a reply with this many stops. */
+    /** Output limit that fits a reply with this many stops. Always allows ample tokens to avoid truncation. */
     private static int outputTokens(int stops) {
-        return 600 + stops * TOKENS_PER_STOP;
+        return Math.max(4000, 800 + stops * TOKENS_PER_STOP);
     }
 
     private static String stopsPerDayText(String pace) {
@@ -219,6 +220,7 @@ public class ItineraryGenerator {
                 {"title":"short catchy trip title","days":[{"title":"theme of the day","stops":["real attraction name 1","real attraction name 2"]}]}
                 Rules: every stop is the name of a genuine tourist attraction or sightseeing spot to visit in %s, as a plain string; \
                 do NOT count eating food or restaurants as a tourist stop; eating meals must not consume a sightseeing slot; \
+                if the destination has fewer spots for the chosen interests than needed for all days, complement them with top cultural, scenic, and heritage landmarks so every day has full attractions; \
                 all attractions of one day must be clustered in the same local neighborhood within 3 to 5 km of each other and listed in visiting order; \
                 no railway stations, airports, overnight hotels or journey from origin; no place appears twice in the trip; \
                 keep to the number of stops per day given above; output compact JSON on one line.
@@ -349,12 +351,14 @@ public class ItineraryGenerator {
                 omit "transitToNext" on the last stop; keep notes under 15 words; \
                 ALL STOPS ARE SIGHTSEEING: Every stop must be a genuine tourist attraction or sightseeing spot \
                 (Heritage, Temple/Religious, Nature, Museum, Culture, Park, Market, Viewpoint). \
+                If the destination has fewer spots for the specified interests than needed for all days, complement them with top cultural, scenic, and heritage landmarks so every day has full attractions; \
                 Do NOT count eating meals or restaurants as a tourist stop — dining must NOT consume a sightseeing slot. \
                 Instead, recommend lunch at a nearby restaurant in the notes of the midday stop. \
                 GEOGRAPHIC CLUSTERING: All attractions for any single day MUST be in the exact same neighborhood \
                 within a tight 3 to 5 km cluster (transit distance < 3 km / 10-15 mins). Never pick far apart attractions \
                 on the same day. No railway stations, airports, overnight hotel check-ins or journey from origin as stops; \
                 no place appears twice in the trip; keep to the number of stops per day given above; \
+                Valid strict JSON only — no trailing commas before } or ], always use colon : between key and value; \
                 output compact JSON on one line, without indentation.
                 """
                 .formatted(days, tripFacts(r), days);
@@ -392,20 +396,113 @@ public class ItineraryGenerator {
         int first = s.indexOf('{');
         int last = s.lastIndexOf('}');
         if (first >= 0 && last > first) {
+            String candidate = s.substring(first, last + 1);
             try {
-                JsonElement el = JsonParser.parseString(s.substring(first, last + 1));
+                JsonElement el = JsonParser.parseString(candidate);
                 if (el.isJsonObject())
                     return el.getAsJsonObject();
             } catch (RuntimeException ignored) {
-                // fall through
             }
+
+            // Immediately try cleaning trailing commas, colon replacements, etc.
+            JsonObject rep = tryRepairJson(candidate);
+            if (rep != null)
+                return rep;
+
+            // Try closing brackets if truncated
+            String closed = tryCloseJson(candidate);
+            try {
+                JsonElement el = JsonParser.parseString(closed);
+                if (el.isJsonObject())
+                    return el.getAsJsonObject();
+            } catch (RuntimeException ignored) {
+            }
+            rep = tryRepairJson(closed);
+            if (rep != null)
+                return rep;
+        }
+
+        // 3. If still not valid, try from first '{' with full auto-close
+        if (first >= 0) {
+            String closed = tryCloseJson(s.substring(first));
+            try {
+                JsonElement el = JsonParser.parseString(closed);
+                if (el.isJsonObject())
+                    return el.getAsJsonObject();
+            } catch (RuntimeException ignored) {
+            }
+            JsonObject rep = tryRepairJson(closed);
+            if (rep != null)
+                return rep;
         }
 
         if (first < 0 || last <= first) {
             throw new AiClient.AiException("The model did not return JSON. Reply began: " + preview(s));
         }
+        System.err.println("[TravelMate AI Debug] parse error. Tail: " + s.substring(Math.max(0, s.length() - 300)));
         throw new AiClient.AiException("The model returned malformed JSON (it may have been cut off — "
                 + "try a higher Max tokens). Reply began: " + preview(s));
+    }
+
+    private static JsonObject tryRepairJson(String jsonText) {
+        if (jsonText == null || jsonText.isBlank()) return null;
+        try {
+            String fixed = jsonText
+                    // Fix LLM comma instead of colon: "key","value" -> "key": "value"
+                    .replaceAll("\"([a-zA-Z0-9_]+)\"\\s*,\\s*(\"[^\"]*\")", "\"$1\": $2")
+                    .replaceAll("\"([a-zA-Z0-9_]+)\"\\s*,\\s*([0-9]+(?:\\.[0-9]+)?|true|false|null)", "\"$1\": $2");
+            // Fix trailing commas before closing braces/brackets (repeat to catch nested trailing commas like ", }}")
+            for (int i = 0; i < 3; i++) {
+                fixed = fixed.replaceAll(",\\s*([}\\]])", "$1");
+            }
+            JsonElement el = JsonParser.parseString(fixed);
+            if (el.isJsonObject()) return el.getAsJsonObject();
+        } catch (RuntimeException ignored) {
+        }
+        return null;
+    }
+
+    private static String tryCloseJson(String s) {
+        if (s == null) return "{}";
+        int openBraces = 0;
+        int openBrackets = 0;
+        boolean inQuotes = false;
+        boolean escape = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (escape) {
+                escape = false;
+                continue;
+            }
+            if (c == '\\') {
+                escape = true;
+                continue;
+            }
+            if (c == '"') {
+                inQuotes = !inQuotes;
+                continue;
+            }
+            if (!inQuotes) {
+                if (c == '{') openBraces++;
+                else if (c == '}') openBraces--;
+                else if (c == '[') openBrackets++;
+                else if (c == ']') openBrackets--;
+            }
+        }
+        if (inQuotes) s = s + "\"";
+        StringBuilder sb = new StringBuilder(s.trim());
+        while (sb.length() > 0 && (sb.charAt(sb.length() - 1) == ',' || Character.isWhitespace(sb.charAt(sb.length() - 1)))) {
+            sb.setLength(sb.length() - 1);
+        }
+        while (openBrackets > 0) {
+            sb.append(']');
+            openBrackets--;
+        }
+        while (openBraces > 0) {
+            sb.append('}');
+            openBraces--;
+        }
+        return sb.toString();
     }
 
     private static List<ItineraryDay> parseDays(JsonObject json, int wanted, double[] center)
@@ -435,6 +532,26 @@ public class ItineraryGenerator {
         }
         if (days.stream().allMatch(d -> d.stops.isEmpty())) {
             throw new AiClient.AiException("The model's itinerary contained no usable stops.");
+        }
+        for (int i = 0; i < days.size(); i++) {
+            ItineraryDay day = days.get(i);
+            if (day.stops.isEmpty()) {
+                ItineraryStop fallback = new ItineraryStop();
+                fallback.id = "stop-ai-" + stamp + "-" + i + "-0";
+                fallback.name = "Local Highlights & Culture Walk";
+                fallback.category = "Culture";
+                fallback.categoryIcon = "bi-palette";
+                fallback.time = "10:00 AM";
+                fallback.duration = "2 hrs";
+                fallback.cost = 100;
+                fallback.notes = "Explore scenic viewpoints, local crafts, and neighborhood cultural landmarks.";
+                if (center != null && center.length == 2) {
+                    fallback.lat = center[0];
+                    fallback.lng = center[1];
+                }
+                day.stops.add(fallback);
+                finishDay(day, "AI-generated plan");
+            }
         }
         return days;
     }

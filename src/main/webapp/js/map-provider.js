@@ -30,9 +30,21 @@
   // ------------------------------------------------------------------ setup
 
   async function init(id, center, zoom) {
+    if (map && containerId === id) {
+      setView(center, zoom);
+      return;
+    }
+    if (map) {
+      teardown();
+    }
     containerId = id;
     lastView = { center, zoom };
-    if (!document.getElementById(id)) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el._leaflet_id) {
+      try { delete el._leaflet_id; } catch (e) { el._leaflet_id = undefined; }
+      el.innerHTML = "";
+    }
 
     let key = null;
     try {
@@ -133,12 +145,19 @@
     previewMarker = null;
     stopInfo = null;
     previewInfo = null;
-    map = null;
+    if (map) {
+      if (provider === "leaflet" && typeof map.remove === "function") {
+        try { map.remove(); } catch (e) {}
+      }
+      map = null;
+    }
+    provider = null;
     const el = document.getElementById(containerId);
     if (el) {
-      const fresh = el.cloneNode(false); // drops Google's listeners and inline styles
-      fresh.removeAttribute("style");
-      el.replaceWith(fresh);
+      if (el._leaflet_id) {
+        try { delete el._leaflet_id; } catch (e) { el._leaflet_id = undefined; }
+      }
+      el.innerHTML = "";
     }
   }
 
