@@ -70,8 +70,11 @@
       </div>
 
       <div class="d-flex align-items-center gap-2">
+        <button type="button" class="tm-btn tm-btn-accent tm-btn-sm" data-bs-toggle="modal" data-bs-target="#tmRouteModal" onclick="openRouteModal()">
+          <i class="bi bi-geo-alt"></i> Change Route
+        </button>
         <a href="plan.html" class="tm-btn tm-btn-outline tm-btn-sm">
-          <i class="bi bi-sliders"></i> Modify Search
+          <i class="bi bi-sliders"></i> Full Plan
         </a>
       </div>
     </div>
@@ -155,6 +158,66 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ================= CHANGE ROUTE MODAL ================= -->
+  <div class="modal fade" id="tmRouteModal" tabindex="-1" aria-labelledby="tmRouteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light">
+          <h5 class="modal-title fw-bold" id="tmRouteModalLabel"><i class="bi bi-geo-alt text-primary"></i> Change Transport Route</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <form id="tmRouteChangeForm" onsubmit="event.preventDefault(); applyRouteModal();">
+            <div class="mb-3">
+              <label for="route-modal-from" class="form-label small fw-semibold">Origin City or Station</label>
+              <input type="text" class="form-control" id="route-modal-from" placeholder="e.g. Bengaluru, New Delhi, Mumbai" required list="route-origin-list">
+              <datalist id="route-origin-list">
+                <option value="Bengaluru">
+                <option value="New Delhi">
+                <option value="Mumbai">
+                <option value="Hyderabad">
+                <option value="Chennai">
+                <option value="Kolkata">
+                <option value="Pune">
+                <option value="Ahmedabad">
+                <option value="Jaipur">
+                <option value="Visakhapatnam">
+                <option value="Vijayawada">
+              </datalist>
+              <div class="form-text small">Station and bus codes are auto-detected for pre-filling.</div>
+            </div>
+            <div class="mb-3">
+              <label for="route-modal-to" class="form-label small fw-semibold">Destination City or Station</label>
+              <input type="text" class="form-control" id="route-modal-to" placeholder="e.g. Mysuru, Goa, Varanasi" required list="route-dest-list">
+              <datalist id="route-dest-list">
+                <option value="Mysuru">
+                <option value="Goa">
+                <option value="Varanasi">
+                <option value="Agra">
+                <option value="Kochi">
+                <option value="Tirupati">
+                <option value="Vijayawada">
+                <option value="Visakhapatnam">
+                <option value="Udaipur">
+                <option value="Amritsar">
+                <option value="Chandigarh">
+                <option value="Dubai">
+              </datalist>
+            </div>
+            <div class="mb-3">
+              <label for="route-modal-date" class="form-label small fw-semibold">Travel Date</label>
+              <input type="date" class="form-control" id="route-modal-date">
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <button type="button" class="tm-btn tm-btn-ghost tm-btn-sm" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="tm-btn tm-btn-accent tm-btn-sm">Apply & Update Links</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   </div>
 
