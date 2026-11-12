@@ -1182,9 +1182,11 @@ document.addEventListener("DOMContentLoaded", () => {
     transportContainer.innerHTML = '<div class="p-4 text-center text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading transport options for your trip…</div>';
   }
   loadTransportFromApi();
+  initTransportMap();
   document.addEventListener("tm:synced", () => {
     renderTransportHeader();
     loadTransportFromApi();
+    initTransportMap();
   });
 
   // Mode filter pills
@@ -1438,10 +1440,10 @@ function renderTransportHeader() {
   const headerTravelers = document.getElementById("tr-header-travelers");
 
   if (headerOrigin) {
-    headerOrigin.innerHTML = `${fromHub ? fromHub.city : from} <span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-6 align-middle ms-1">${fromHub ? fromHub.railCode : ''}</span>`;
+    headerOrigin.textContent = fromHub ? fromHub.city : from;
   }
   if (headerDest) {
-    headerDest.innerHTML = `${toHub ? toHub.city : to} <span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-6 align-middle ms-1">${toHub ? toHub.railCode : ''}</span>`;
+    headerDest.textContent = toHub ? toHub.city : to;
   }
   if (headerDate) {
     headerDate.textContent = dates.display;
@@ -1457,7 +1459,7 @@ function renderTransportHeader() {
     if (bannerContainer) {
       indicatorEl = document.createElement("div");
       indicatorEl.id = "tm-transit-codes-banner";
-      indicatorEl.className = "w-100 mt-2 pt-2 border-top d-flex flex-wrap gap-2 align-items-center text-muted small";
+      indicatorEl.className = "mt-3 pt-2 border-top d-flex flex-wrap gap-2 align-items-center text-muted small";
       bannerContainer.appendChild(indicatorEl);
     }
   }
@@ -1465,10 +1467,10 @@ function renderTransportHeader() {
   if (indicatorEl && fromHub && toHub) {
     indicatorEl.innerHTML = `
       <span class="fw-semibold text-dark"><i class="bi bi-link-45deg text-primary"></i> Pre-filled Direct Links:</span>
-      <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-train-front"></i> redRail: ${fromHub.railCode} ➔ ${toHub.railCode}</span>
-      <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-bus-front"></i> redBus: ${fromHub.busName} (${fromHub.busId || 'Auto'}) ➔ ${toHub.busName} (${toHub.busId || 'Auto'})</span>
-      <span class="badge bg-info-subtle text-dark border border-info-subtle"><i class="bi bi-airplane"></i> Booking.com: ${fromHub.flightIata} ➔ ${toHub.flightIata}</span>
-      <span class="ms-auto text-success fw-semibold"><i class="bi bi-check2-circle"></i> Station & Bus Codes Ready</span>
+      <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-train-front me-1"></i> redRail: ${fromHub.railCode} ➔ ${toHub.railCode}</span>
+      <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-bus-front me-1"></i> redBus: ${fromHub.busName} ➔ ${toHub.busName}</span>
+      <span class="badge bg-info-subtle text-dark border border-info-subtle"><i class="bi bi-airplane me-1"></i> Flights: ${fromHub.flightIata} ➔ ${toHub.flightIata}</span>
+      <span class="ms-auto text-success fw-semibold"><i class="bi bi-check2-circle me-1"></i> Station & Bus Codes Pre-configured</span>
     `;
   }
 }
@@ -1521,14 +1523,14 @@ function renderTransportCards() {
     let originCodeBadge = "";
     let destCodeBadge = "";
     if (tr.mode === "train" && fromHub && toHub) {
-      originCodeBadge = `<span class="badge bg-secondary-subtle text-dark ms-1 font-monospace">${fromHub.railCode}</span>`;
-      destCodeBadge = `<span class="badge bg-secondary-subtle text-dark ms-1 font-monospace">${toHub.railCode}</span>`;
+      originCodeBadge = `<span class="badge bg-secondary-subtle text-dark font-monospace">${fromHub.railCode}</span>`;
+      destCodeBadge = `<span class="badge bg-secondary-subtle text-dark font-monospace">${toHub.railCode}</span>`;
     } else if (tr.mode === "flight" && fromHub && toHub) {
-      originCodeBadge = `<span class="badge bg-info-subtle text-dark ms-1 font-monospace">${fromHub.flightIata}</span>`;
-      destCodeBadge = `<span class="badge bg-info-subtle text-dark ms-1 font-monospace">${toHub.flightIata}</span>`;
+      originCodeBadge = `<span class="badge bg-info-subtle text-dark font-monospace">${fromHub.flightIata}</span>`;
+      destCodeBadge = `<span class="badge bg-info-subtle text-dark font-monospace">${toHub.flightIata}</span>`;
     } else if (tr.mode === "bus" && fromHub && toHub) {
-      originCodeBadge = `<span class="badge bg-light text-muted border ms-1">${fromHub.busName}</span>`;
-      destCodeBadge = `<span class="badge bg-light text-muted border ms-1">${toHub.busName}</span>`;
+      originCodeBadge = `<span class="badge bg-light text-muted border">${fromHub.busName}</span>`;
+      destCodeBadge = `<span class="badge bg-light text-muted border">${toHub.busName}</span>`;
     }
 
     return `
@@ -1549,9 +1551,10 @@ function renderTransportCards() {
           <!-- Schedule & Duration -->
           <div class="col-md-5">
             <div class="d-flex align-items-center justify-content-between text-center">
-              <div class="text-start">
+              <div class="text-start" style="min-width: 80px;">
                 <h5 class="fw-bold m-0 text-dark">${tr.depTime}</h5>
-                <small class="text-muted text-truncate d-block" style="max-width:140px;">${tr.origin}${originCodeBadge}</small>
+                <div class="small fw-semibold text-secondary">${tr.origin}</div>
+                ${originCodeBadge ? `<div class="mt-1">${originCodeBadge}</div>` : ''}
               </div>
 
               <div class="px-2 flex-grow-1">
@@ -1563,9 +1566,10 @@ function renderTransportCards() {
                 <small class="badge bg-light text-success border border-success-subtle">${tr.priceCategory}</small>
               </div>
 
-              <div class="text-end">
+              <div class="text-end" style="min-width: 80px;">
                 <h5 class="fw-bold m-0 text-dark">${tr.arrTime}</h5>
-                <small class="text-muted text-truncate d-block" style="max-width:140px;">${tr.destination}${destCodeBadge}</small>
+                <div class="small fw-semibold text-secondary">${tr.destination}</div>
+                ${destCodeBadge ? `<div class="mt-1">${destCodeBadge}</div>` : ''}
               </div>
             </div>
           </div>
@@ -1579,7 +1583,7 @@ function renderTransportCards() {
                 <small class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> ${tr.availability}</small>
               </div>
 
-              <div class="mt-md-3">
+              <div class="mt-md-3 w-100">
                 ${renderTransportActions(tr, fromHub, toHub)}
               </div>
             </div>
@@ -1609,48 +1613,53 @@ function parseDurationToMinutes(durationStr) {
 
 function renderTransportActions(tr, fromHub, toHub) {
   if (tr.mode === "train") {
-    const codeTag = (fromHub && toHub) ? ` (${fromHub.railCode} ➔ ${toHub.railCode})` : "";
     return `
-      <div class="text-md-end">
-        <button type="button" class="tm-btn tm-btn-accent tm-btn-sm" onclick="openTransportPlatform('${tr.id}')">
-          <i class="bi bi-train-front"></i> Search on redRail${codeTag}
+      <div class="text-md-end w-100">
+        <button type="button" class="tm-btn tm-btn-accent tm-btn-sm w-100" onclick="openTransportPlatform('${tr.id}')">
+          <i class="bi bi-train-front me-1"></i> Book on redRail
         </button>
-        <div class="text-muted small mt-1" style="font-size:0.75rem;"><i class="bi bi-check2"></i> Station codes pre-filled</div>
+        <div class="text-muted small mt-1 text-md-end" style="font-size:0.75rem;">
+          <i class="bi bi-check2 text-success"></i> Auto-fills <strong>${fromHub ? fromHub.railCode : 'Origin'} ➔ ${toHub ? toHub.railCode : 'Dest'}</strong>
+        </div>
       </div>
     `;
   }
   if (tr.mode === "bus") {
-    const codeTag = (fromHub && toHub) ? ` (${fromHub.busName} ➔ ${toHub.busName})` : "";
     return `
-      <div class="text-md-end">
-        <button type="button" class="tm-btn tm-btn-accent tm-btn-sm" onclick="openTransportPlatform('${tr.id}')">
-          <i class="bi bi-bus-front"></i> Search on redBus${codeTag}
+      <div class="text-md-end w-100">
+        <button type="button" class="tm-btn tm-btn-accent tm-btn-sm w-100" onclick="openTransportPlatform('${tr.id}')">
+          <i class="bi bi-bus-front me-1"></i> Book on redBus
         </button>
-        <div class="text-muted small mt-1" style="font-size:0.75rem;"><i class="bi bi-check2"></i> City & bus IDs pre-filled</div>
+        <div class="text-muted small mt-1 text-md-end" style="font-size:0.75rem;">
+          <i class="bi bi-check2 text-success"></i> Auto-fills <strong>${fromHub ? fromHub.busName : 'Origin'} ➔ ${toHub ? toHub.busName : 'Dest'}</strong>
+        </div>
       </div>
     `;
   }
   if (tr.mode === "flight") {
-    const codeTag = (fromHub && toHub) ? ` (${fromHub.flightIata} ➔ ${toHub.flightIata})` : "";
     return `
-      <div class="text-md-end">
-        <button type="button" class="tm-btn tm-btn-accent tm-btn-sm" onclick="openTransportPlatform('${tr.id}')">
-          <i class="bi bi-airplane"></i> Search Flights${codeTag}
+      <div class="text-md-end w-100">
+        <button type="button" class="tm-btn tm-btn-accent tm-btn-sm w-100" onclick="openTransportPlatform('${tr.id}')">
+          <i class="bi bi-airplane me-1"></i> Search Flights
         </button>
-        <div class="text-muted small mt-1" style="font-size:0.75rem;"><i class="bi bi-check2"></i> Booking.com IATA pre-filled</div>
+        <div class="text-muted small mt-1 text-md-end" style="font-size:0.75rem;">
+          <i class="bi bi-check2 text-success"></i> Booking.com (${fromHub ? fromHub.flightIata : 'DEP'} ➔ ${toHub ? toHub.flightIata : 'ARR'})
+        </div>
       </div>
     `;
   }
   if (tr.mode === "car") {
     return `
-      <div class="d-flex flex-wrap gap-2 justify-content-md-end">
-        <button type="button" class="tm-btn tm-btn-accent tm-btn-sm" onclick="openCabPlatform('${tr.id}','uber')"><i class="bi bi-car-front"></i> Uber</button>
-        <button type="button" class="tm-btn tm-btn-outline tm-btn-sm" onclick="openCabPlatform('${tr.id}','rapido')"><i class="bi bi-bicycle"></i> Rapido</button>
-        <button type="button" class="tm-btn tm-btn-outline tm-btn-sm" onclick="openSelfDriveMap('${tr.id}')"><i class="bi bi-map"></i> Self-drive Map</button>
+      <div class="d-flex flex-column gap-2 w-100">
+        <div class="d-flex gap-2 justify-content-md-end">
+          <button type="button" class="tm-btn tm-btn-accent tm-btn-sm flex-fill" onclick="openCabPlatform('${tr.id}','uber')"><i class="bi bi-car-front me-1"></i> Uber</button>
+          <button type="button" class="tm-btn tm-btn-outline tm-btn-sm flex-fill" onclick="openCabPlatform('${tr.id}','rapido')"><i class="bi bi-bicycle me-1"></i> Rapido</button>
+        </div>
+        <button type="button" class="tm-btn tm-btn-outline tm-btn-sm w-100" onclick="openSelfDriveMap('${tr.id}')"><i class="bi bi-map me-1"></i> Open Google Maps Route</button>
       </div>
     `;
   }
-  return `<button type="button" class="tm-btn tm-btn-accent tm-btn-sm" onclick="openTransportPlatform('${tr.id}')">Continue</button>`;
+  return `<button type="button" class="tm-btn tm-btn-accent tm-btn-sm w-100" onclick="openTransportPlatform('${tr.id}')">Continue</button>`;
 }
 
 function openTransportPlatform(transportId) {
@@ -1746,6 +1755,96 @@ function applyRouteModal() {
 
   renderTransportHeader();
   renderTransportCards();
+  initTransportMap();
+}
+
+/**
+ * Route Map & Google Maps Integration
+ */
+const TM_CITY_COORDINATES = {
+  "bengaluru": [12.9716, 77.5946],
+  "bangalore": [12.9716, 77.5946],
+  "mysuru": [12.2958, 76.6394],
+  "mysore": [12.2958, 76.6394],
+  "new delhi": [28.6139, 77.2090],
+  "delhi": [28.6139, 77.2090],
+  "mumbai": [19.0760, 72.8777],
+  "hyderabad": [17.3850, 78.4867],
+  "chennai": [13.0827, 80.2707],
+  "kolkata": [22.5726, 88.3639],
+  "pune": [18.5204, 73.8567],
+  "ahmedabad": [23.0225, 72.5714],
+  "jaipur": [26.9124, 75.7873],
+  "goa": [15.2993, 74.1240],
+  "tirupati": [13.6288, 79.4192],
+  "agra": [27.1767, 78.0081],
+  "varanasi": [25.3176, 82.9739],
+  "kochi": [9.9312, 76.2673],
+  "visakhapatnam": [17.6868, 83.2185],
+  "vijayawada": [16.5062, 80.6480],
+  "udaipur": [24.5854, 73.7125],
+  "amritsar": [31.6340, 74.8723],
+  "chandigarh": [30.7333, 76.7794],
+  "dubai": [25.2048, 55.2708]
+};
+
+async function initTransportMap() {
+  const container = document.getElementById("transport-map-container");
+  if (!container) return;
+
+  const trip = window.TravelMateStore?.getActiveTrip?.() || {};
+  const from = trip.origin || "Bengaluru";
+  const to = trip.destination || "Mysuru";
+
+  const fromHub = tmResolveTransitCodes(from);
+  const toHub = tmResolveTransitCodes(to);
+  const fromCity = fromHub ? fromHub.city : from;
+  const toCity = toHub ? toHub.city : to;
+
+  // Direct Google Maps Directions link
+  const gmapsLink = document.getElementById("tr-gmaps-link");
+  if (gmapsLink) {
+    const originParam = encodeURIComponent(fromCity);
+    const destParam = encodeURIComponent(toCity);
+    gmapsLink.href = `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${destParam}&travelmode=driving`;
+  }
+
+  // Lookup coordinates for distance calculation and map markers
+  const fromKey = fromCity.toLowerCase().trim();
+  const toKey = toCity.toLowerCase().trim();
+  const fromCoord = TM_CITY_COORDINATES[fromKey] || [12.9716, 77.5946];
+  const toCoord = TM_CITY_COORDINATES[toKey] || [12.2958, 76.6394];
+
+  // Calculate highway distance with road winding factor
+  const dLat = (toCoord[0] - fromCoord[0]) * Math.PI / 180;
+  const dLon = (toCoord[1] - fromCoord[1]) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(fromCoord[0] * Math.PI / 180) * Math.cos(toCoord[0] * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const roadKm = Math.round(Math.max(10, 6371 * c * 1.25));
+
+  const driveHours = Math.floor(roadKm / 55);
+  const driveMins = Math.round((roadKm % 55) / 55 * 60);
+
+  const distEl = document.getElementById("tr-route-distance");
+  const durEl = document.getElementById("tr-route-duration");
+  if (distEl) distEl.textContent = `~${roadKm} km (by road)`;
+  if (durEl) durEl.textContent = driveHours > 0 ? `~${driveHours} hrs ${driveMins} mins` : `~${driveMins} mins`;
+
+  if (window.TMMap) {
+    try {
+      const midLat = (fromCoord[0] + toCoord[0]) / 2;
+      const midLng = (fromCoord[1] + toCoord[1]) / 2;
+      await window.TMMap.init("transport-map-container", [midLat, midLng], 7);
+      window.TMMap.showStops([
+        { id: "origin", lat: fromCoord[0], lng: fromCoord[1], label: "1", html: `<strong>${fromCity}</strong><br>Origin` },
+        { id: "dest", lat: toCoord[0], lng: toCoord[1], label: "2", html: `<strong>${toCity}</strong><br>Destination` }
+      ]);
+    } catch (err) {
+      console.warn("Transport route map initialization error:", err);
+    }
+  }
 }
 
 // Window global exports
@@ -1753,6 +1852,7 @@ window.openTransportPlatform = openTransportPlatform;
 window.openCabPlatform = openCabPlatform;
 window.openSelfDriveMap = openSelfDriveMap;
 window.loadTransportFromApi = loadTransportFromApi;
+window.initTransportMap = initTransportMap;
 window.tmResolveTransitCodes = tmResolveTransitCodes;
 window.tmRedrailUrl = tmRedrailUrl;
 window.tmRedbusBusUrl = tmRedbusBusUrl;

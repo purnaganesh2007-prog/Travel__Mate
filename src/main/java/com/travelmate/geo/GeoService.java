@@ -28,7 +28,11 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Place search, geocoding and reverse geocoding with OpenStreetMap Nominatim.
+ * Place search, geocoding and reverse geocoding.
+ *
+ * When TM_GOOGLE_MAPS_KEY is configured the default instance uses Google Maps Platform
+ * (see {@link GoogleMapsClient}); otherwise, or when a Google call fails, it uses
+ * OpenStreetMap Nominatim as described below.
  *
  * Nominatim's usage policy requires at most 1 request per second, an
  * identifying
@@ -51,10 +55,28 @@ public class GeoService {
     public static final long CACHE_TTL_MS = 24 * 3600 * 1000L; // 24 hours
     public static final int MAX_CACHE_ENTRIES = 1000;
 
-    private static final GeoService DEFAULT_INSTANCE = new GeoService();
+    private static final GeoService DEFAULT_INSTANCE = new GeoService().withGoogle(GoogleMapsClient.fromEnvironment());
 
     public static GeoService getDefault() {
         return DEFAULT_INSTANCE;
+    }
+
+    /** Google Maps Platform client; when set it is used first and OpenStreetMap is the fallback. */
+    private volatile GoogleMapsClient google;
+
+    public GeoService withGoogle(GoogleMapsClient client) {
+        this.google = client;
+        return this;
+    }
+
+    /** True when searches and geocoding go to Google Maps rather than OpenStreetMap. */
+    public boolean isGoogleEnabled() {
+        return google != null;
+    }
+
+    private static void logGoogleFailure(String what, Exception e) {
+        System.err.println("[TravelMate] Google Maps " + what + " failed, using OpenStreetMap instead: "
+                + e.getMessage());
     }
 
     private static final Object PUBLIC_NOMINATIM_LOCK = new Object();
@@ -203,6 +225,19 @@ public class GeoService {
             cleanQuery = cleanQuery.substring(0, 200).trim();
         }
 
+        GoogleMapsClient g = google;
+        if (g != null) {
+            try {
+                List<Place> hits = g.search(cleanQuery, center, radiusDeg, bounded, limit);
+                if (category != null && !category.isBlank()) {
+                    hits.removeIf(p -> p.category == null || !p.category.equalsIgnoreCase(category.trim()));
+                }
+                return hits;
+            } catch (IOException | RuntimeException e) {
+                logGoogleFailure("place search", e);
+            }
+        }
+
         int clampedLimit = Math.max(1, Math.min(limit, 20));
         StringBuilder url = new StringBuilder(baseUrl)
                 .append("/search?format=jsonv2&addressdetails=1&extratags=1&namedetails=0&accept-language=en&limit=")
@@ -253,6 +288,14 @@ public class GeoService {
         if (!isValidCoordinate(lat, lng)) {
             throw new IllegalArgumentException("Invalid coordinate values: lat=" + lat + ", lng=" + lng);
         }
+        GoogleMapsClient g = google;
+        if (g != null) {
+            try {
+                return g.reverse(lat, lng);
+            } catch (IOException | RuntimeException e) {
+                logGoogleFailure("reverse geocoding", e);
+            }
+        }
         String url = baseUrl + "/reverse?format=jsonv2&addressdetails=1&extratags=1&zoom=18&accept-language=en&lat="
                 + lat + "&lon=" + lng;
         String rawJson = get(url);
@@ -268,6 +311,12 @@ public class GeoService {
         p.lat = lat;
         p.lng = lng;
         return p;
+    }
+
+    /** Full details for a Google place id (a click on a Google map POI). Null without Google. */
+    public Place placeDetails(String placeId) throws IOException {
+        GoogleMapsClient g = google;
+        return g == null ? null : g.details(placeId);
     }
 
     // ---------------------------------------------------------------- geocoding
@@ -289,6 +338,34 @@ public class GeoService {
     public Place geocode(String name, String destination, double[] center) {
         if (name == null || name.isBlank()) {
             return null;
+        }
+        boolean hasCenter = center != null && center.length == 2 && isValidCoordinate(center[0], center[1]);
+        GoogleMapsClient g = google;
+        if (g != null) {
+            try {
+                // With a centre the search is biased to the destination, so the name alone finds the right
+                // branch there; adding the city would drag a place of another city ("Bengaluru City
+                // Railway Station") onto a similar one in the destination.
+                boolean addCity = !hasCenter && destination != null && !destination.isBlank()
+                        && !name.toLowerCase(Locale.ROOT).contains(destination.trim().toLowerCase(Locale.ROOT));
+                String q = addCity ? name.trim() + ", " + destination.trim() : name.trim();
+                for (Place p : g.search(q, center, 0.45, false, 3)) {
+                    // A match far from the destination is a namesake elsewhere, not this stop (< 0.25 deg ~27 km)
+                    if (!hasCenter || (Math.abs(p.lat - center[0]) <= 0.25 && Math.abs(p.lng - center[1]) <= 0.25))
+                        return p;
+                }
+                // If query included destination name, allow up to 0.35 deg (~38 km) for outer suburban sights
+                if (hasCenter && destination != null && !destination.isBlank()
+                        && !name.toLowerCase(Locale.ROOT).contains(destination.trim().toLowerCase(Locale.ROOT))) {
+                    for (Place p : g.search(name.trim() + ", " + destination.trim(), center, 0.45, false, 1)) {
+                        if (Math.abs(p.lat - center[0]) <= 0.35 && Math.abs(p.lng - center[1]) <= 0.35)
+                            return p;
+                    }
+                }
+                return null;
+            } catch (IOException | RuntimeException e) {
+                logGoogleFailure("geocoding", e);
+            }
         }
         try {
             List<Place> hits = (center != null && center.length == 2 && isValidCoordinate(center[0], center[1]))
