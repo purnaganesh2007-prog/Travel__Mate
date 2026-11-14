@@ -97,65 +97,140 @@ Planning a trip today is chaotic and frustrating:
 
 ## 🏛️ System Architecture
 
+TravelMate follows a clean 5-tier modular enterprise architecture separating the presentation layer, REST controllers, business domain services, JDBC persistence layer, and external cloud APIs.
+
+```text
++---------------------------------------------------------------------------------------------------+
+|                                CLIENT PRESENTATION LAYER (BROWSER)                                |
+|                                                                                                   |
+|   +-----------------------+     +-----------------------+     +-------------------------------+   |
+|   |    Modern Web UI      |     |  Interactive Maps     |     |       Expense Analytics       |   |
+|   | (HTML5 / CSS3 / ES6)  |     | (Google Maps/Leaflet) |     |          (Chart.js)           |   |
+|   +-----------+-----------+     +-----------+-----------+     +---------------+---------------+   |
+|               |                             |                                 |                   |
+|               +-----------------------+     |     +---------------------------+                   |
+|                                       |     |     |                                               |
+|                                       v     v     v                                               |
+|                           +-------------------------------+                                       |
+|                           |      Browser Local Cache      |                                       |
+|                           |     (localStorage Offline)    |                                       |
+|                           +---------------+---------------+                                       |
++-------------------------------------------|-------------------------------------------------------+
+                                            | HTTPS / REST JSON APIs
+                                            v
++---------------------------------------------------------------------------------------------------+
+|                        CONTROLLER & SECURITY LAYER (Tomcat 10 / Jetty 11)                         |
+|                                                                                                   |
+|   +-------------------------------------------------------------------------------------------+   |
+|   |                                 REST Controller Servlets                                  |   |
+|   |         TripServlet | BudgetServlet | GeoServlet | WeatherServlet | AiServlet             |   |
+|   +---------------------------------------------+---------------------------------------------+   |
+|                                                 |                                                 |
+|                                                 v                                                 |
+|   +-------------------------------------------------------------------------------------------+   |
+|   |                                  Security & CORS Filter                                   |   |
+|   |                       Session Auth | BCrypt Password Hashing | CORS                       |   |
+|   +---------------------------------------------+---------------------------------------------+   |
++-------------------------------------------------|-------------------------------------------------+
+                                                  |
+                                                  v
++---------------------------------------------------------------------------------------------------+
+|                                    BUSINESS & DOMAIN SERVICES                                     |
+|                                                                                                   |
+|   +--------------------------+  +--------------------------+  +-------------------------------+   |
+|   |    AI Itinerary Engine   |  |        GeoService        |  |        WeatherService         |   |
+|   |  (Proximity Clustering)  |  |  (Routing & Geocoding)   |  |   (7-Day Forecast & Advice)   |   |
+|   +-------------+------------+  +-------------+------------+  +---------------+---------------+   |
++-----------------|-----------------------------|-------------------------------|-------------------+
+                  |                             |                               |
+                  v                             v                               v
+    +---------------------------+ +---------------------------+ +-------------------------------+
+    |    External LLM APIs      | | Google Maps / Nominatim   | |       Open-Meteo API          |
+    | (OpenAI / Gemini / Groq)  | | (Places / Waypoint Route) | |   (Live Climate Telemetry)    |
+    +---------------------------+ +---------------------------+ +-------------------------------+
+                                                |
+                                                v
++---------------------------------------------------------------------------------------------------+
+|                                    DATA ACCESS LAYER (JDBC)                                       |
+|                                                                                                   |
+|   +-------------------------------------------------------------------------------------------+   |
+|   |                        DAOs: TripDAO | BudgetDAO | UserDAO | CatalogDAO                   |   |
+|   +---------------------------------------------+---------------------------------------------+   |
+|                                                 |                                                 |
+|                                                 v                                                 |
+|   +-------------------------------------------------------------------------------------------+   |
+|   |               DBConnection (HikariCP / Connection Pooling) & Schema Initializer            |   |
+|   +----------------------+---------------------------------------------+----------------------+   |
++--------------------------|---------------------------------------------|--------------------------+
+                           |                                             |
+                           v                                             v
+             +---------------------------+                 +---------------------------+
+             |         MySQL 8.0         |                 |        Embedded H2        |
+             |   (Production Database)   |                 |    (Zero-Config Demo)     |
+             +---------------------------+                 +---------------------------+
+```
+
 ```mermaid
-flowchart TD
-    subgraph Client ["Client Presentation Layer (Browser)"]
-        UI["Modern Glassmorphic UI<br/>(HTML5 / CSS3 / ES6 Modular JS)"]
-        MapClient["Dual Map Client<br/>(Google Maps JS API / Leaflet OSM)"]
-        Analytics["Expense Charts<br/>(Chart.js / Canvas)"]
-        OfflineStore["Client-side Cache<br/>(localStorage / Offline Fallback)"]
+graph TD
+    classDef client fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef server fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+    classDef service fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
+    classDef data fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef cloud fill:#ede7f6,stroke:#512da8,stroke-width:2px;
+    classDef db fill:#fce4ec,stroke:#c2185b,stroke-width:2px;
+
+    subgraph ClientLayer [1. Client Presentation Layer]
+        UI[Modern Web UI - HTML5 / CSS3 / ES6 JS]:::client
+        MapUI[Interactive Maps - Google Maps & Leaflet]:::client
+        ChartUI[Budget Analytics - Chart.js]:::client
+        LocalCache[Offline Cache - localStorage]:::client
     end
 
-    subgraph Server ["Server & Servlet Controller Layer (Tomcat 10 / Jetty 11)"]
-        Router["REST Controller Servlets<br/>(TripServlet, BudgetServlet, GeoServlet, WeatherServlet, AiServlet, AuthServlet)"]
-        SecurityFilter["Security & CORS Filter<br/>(Session Auth / BCrypt / Rate Limiting)"]
+    subgraph ServerLayer [2. Controller & Security Layer]
+        Servlets[REST Controller Servlets - Trip, Budget, Geo, Weather, Ai, Auth]:::server
+        Security[Security & CORS Filter - Session Auth & BCrypt]:::server
     end
 
-    subgraph Service ["Business & Domain Services"]
-        AiEngine["AI Itinerary Generator<br/>(Proximity Clustering & Heuristics)"]
-        GeoSvc["GeoService & Routing<br/>(Waypoint Calculation & Geocoding)"]
-        WeatherSvc["WeatherService<br/>(Forecast Fetcher & Advisories)"]
-        ConfigSvc["EnvLoader<br/>(Strict Secure Credential Management)"]
+    subgraph ServiceLayer [3. Business & Domain Services]
+        AiEngine[AI Itinerary Engine - Proximity Clustering]:::service
+        GeoSvc[GeoService - Geocoding & Route Calculation]:::service
+        WeatherSvc[WeatherService - Live Forecasts & Heuristics]:::service
     end
 
-    subgraph Data ["Data Access Layer (JDBC)"]
-        DAOs["Data Access Objects<br/>(TripDAO, BudgetDAO, UserDAO, CatalogDAO)"]
-        DBInit["DatabaseInitializer & Migrations<br/>(Schema Creation, Seeding & Upgrades)"]
-        ConnPool["DBConnection<br/>(Connection Pooling / Auto-Reconnect)"]
+    subgraph CloudAPIs [4. External Cloud APIs]
+        LLMAPI[OpenAI / Gemini / Groq LLMs]:::cloud
+        MapsAPI[Google Maps Platform & OSM Nominatim]:::cloud
+        WeatherAPI[Open-Meteo Weather API]:::cloud
     end
 
-    subgraph Storage ["Database Persistence"]
-        MySQL[("MySQL 8.0<br/>(Production Database)")]
-        H2[("Embedded H2<br/>(Zero-Config Demo Mode)")]
+    subgraph DataLayer [5. Data Access Layer]
+        DAOs[Data Access Objects - TripDAO, BudgetDAO, UserDAO]:::data
+        DBPool[DBConnection & DatabaseInitializer]:::data
     end
 
-    subgraph Cloud ["External Cloud APIs"]
-        LLM["OpenAI / Gemini / Groq<br/>(LLM Inference API)"]
-        GMaps["Google Maps Platform<br/>(Places, Directions, Geocoding)"]
-        OSM["OpenStreetMap Nominatim<br/>(Open Geocoding)"]
-        OpenMeteo["Open-Meteo API<br/>(Real-Time Weather Data)"]
+    subgraph StorageLayer [6. Persistence Layer]
+        MySQL[(MySQL 8.0 Production Database)]:::db
+        H2[(Embedded H2 Demo Database)]:::db
     end
 
-    UI --> Router
-    MapClient --> GeoSvc
-    Analytics --> UI
-    UI -.-> OfflineStore
+    UI --> Servlets
+    MapUI --> Servlets
+    ChartUI --> Servlets
+    UI -.-> LocalCache
 
-    Router --> SecurityFilter
-    SecurityFilter --> AiEngine
-    SecurityFilter --> GeoSvc
-    SecurityFilter --> WeatherSvc
-    SecurityFilter --> DAOs
+    Servlets --> Security
+    Security --> AiEngine
+    Security --> GeoSvc
+    Security --> WeatherSvc
+    Security --> DAOs
 
-    AiEngine --> LLM
-    GeoSvc --> GMaps
-    GeoSvc --> OSM
-    WeatherSvc --> OpenMeteo
+    AiEngine --> LLMAPI
+    GeoSvc --> MapsAPI
+    WeatherSvc --> WeatherAPI
 
-    DAOs --> ConnPool
-    DBInit --> ConnPool
-    ConnPool --> MySQL
-    ConnPool --> H2
+    DAOs --> DBPool
+    DBPool --> MySQL
+    DBPool --> H2
 ```
 
 ---
